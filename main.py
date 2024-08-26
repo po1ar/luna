@@ -10,7 +10,7 @@ import os
 
 # Load environment variables from .env file
 load_dotenv()
-
+#new
 # Alpaca API credentials
 API_KEY = os.getenv('API_KEY')
 API_SECRET = os.getenv('API_SECRET')
