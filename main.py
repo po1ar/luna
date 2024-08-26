@@ -10,12 +10,12 @@ import os
 
 # Load environment variables from .env file
 load_dotenv()
-#new
+
 # Alpaca API credentials
 API_KEY = os.getenv('API_KEY')
 API_SECRET = os.getenv('API_SECRET')
 BASE_URL = os.getenv('BASE_URL')
-print(API_KEY, API_SECRET, BASE_URL)
+
 # Initialize Alpaca API
 api = tradeapi.REST(API_KEY, API_SECRET, base_url=BASE_URL, api_version='v2')
 
@@ -26,8 +26,11 @@ ema_fast = int(os.getenv('EMA_FAST'))
 ema_slow = int(os.getenv('EMA_SLOW'))
 profit_target = float(os.getenv('PROFIT_TARGET'))
 
-# Webhook URL for daily stats
+# Webhook URL for daily stats and heartbeat
 WEBHOOK_URL = os.getenv('WEBHOOK_URL')
+
+# Heartbeat interval in seconds
+HEARTBEAT_INTERVAL = 300  # 5 minutes
 
 def get_historical_data():
     end = (datetime.now().replace(hour=0, minute=0, second=0, microsecond=0) -
@@ -40,18 +43,14 @@ def get_historical_data():
                         limit=10000).df
     return bars
 
-
 def calculate_ema(data, period):
     return data['close'].ewm(span=period, adjust=False).mean()
-
 
 def check_buy_condition(fast_ema, slow_ema):
     return fast_ema.iloc[-1] > slow_ema.iloc[-1]
 
-
 def check_sell_condition(entry_price, current_price):
     return (current_price - entry_price) >= profit_target
-
 
 def send_daily_report(stats):
     payload = {
@@ -65,6 +64,11 @@ def send_daily_report(stats):
     }
     requests.post(WEBHOOK_URL, json=payload)
 
+def heartbeat():
+    payload = {
+        'content': f"Heartbeat: {datetime.now()} - Script is running"
+    }
+    requests.post(WEBHOOK_URL, json=payload)
 
 def run_trading_algorithm():
     position = None
@@ -74,6 +78,8 @@ def run_trading_algorithm():
         'profitable_trades': 0,
         'total_profit': 0
     }
+    last_heartbeat = time.time()
+    report_sent = False
 
     while True:
         try:
@@ -128,8 +134,8 @@ def run_trading_algorithm():
                     entry_price = None
 
             # Send daily report at the end of the trading day
-            if datetime.now().time() >= datetime.strptime('16:00',
-                                                          '%H:%M').time():
+            current_time = datetime.now().time()
+            if current_time >= datetime.strptime('16:00', '%H:%M').time() and not report_sent:
                 daily_stats['win_rate'] = (
                     daily_stats['profitable_trades'] /
                     daily_stats['total_trades']
@@ -140,13 +146,22 @@ def run_trading_algorithm():
                     'profitable_trades': 0,
                     'total_profit': 0
                 }
+                report_sent = True
 
-            time.sleep(60)  # Wait for 5 minutes before next iteration
+            # Reset report_sent flag at the start of a new day
+            if current_time < datetime.strptime('16:00', '%H:%M').time():
+                report_sent = False
+
+            # Heartbeat check
+            if time.time() - last_heartbeat >= HEARTBEAT_INTERVAL:
+                heartbeat()
+                last_heartbeat = time.time()
+
+            time.sleep(60)  # Wait for 1 minute before next iteration
 
         except Exception as e:
             print(f"An error occurred: {e}")
             time.sleep(60)  # Wait for 1 minute before retrying
-
 
 if __name__ == "__main__":
     run_trading_algorithm()
