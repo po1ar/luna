@@ -15,7 +15,7 @@ load_dotenv()
 API_KEY = os.getenv('API_KEY')
 API_SECRET = os.getenv('API_SECRET')
 BASE_URL = os.getenv('BASE_URL')
-
+print(API_KEY, API_SECRET, BASE_URL)
 # Initialize Alpaca API
 api = tradeapi.REST(API_KEY, API_SECRET, base_url=BASE_URL, api_version='v2')
 
